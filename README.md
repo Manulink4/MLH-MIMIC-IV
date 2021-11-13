@@ -1,2 +1,2 @@
 # MLH-MIMIC-IV
-Repository for MLH final project
+Repository for MLH final project. 
