@@ -6,10 +6,9 @@ def setabspath(**kwargs):
             absFilePath = os.path.abspath(__file__)
             dname = os.path.dirname(absFilePath)
             os.chdir(dname)
-            # print(dname)
-            print(kwargs)
+            print(dname)
             if kwargs == {}:
-                print(dname)
+                # os.system('call anaconda3/Scripts/activate.bat C:/Users/Pablo/anaconda3 && conda activate st && streamlit run inputfile.py')
                 os.system('call C:/Users/Pablo/anaconda3/Scripts/activate.bat C:/Users/Pablo/anaconda3 && conda activate st && streamlit run inputfile.py')
                     # os.system('call C:/Users/Pablo/anaconda3/Scripts/activate.bat C:/Users/Pablo/anaconda3 && conda activate st && streamlit run inputfile.py')
             else:
@@ -20,7 +19,7 @@ def setabspath(**kwargs):
                 
 if __name__=="__main__":
     # admin = None
-    admin = 0
+    admin = None
     c = 0
     while admin not in [0,1]:
         if c>0:
