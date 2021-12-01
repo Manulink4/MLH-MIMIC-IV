@@ -2,7 +2,7 @@ import os
 import sys
 
 def setabspath(**kwargs):
-            filePath = __file__
+            
             absFilePath = os.path.abspath(__file__)
             dname = os.path.dirname(absFilePath)
             os.chdir(dname)
