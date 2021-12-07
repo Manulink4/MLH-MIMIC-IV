@@ -1,0 +1,9 @@
+#### Create a conda environment 
+conda create --name myenv
+#### Activate environment
+conda activate myenv
+### Dependencies inside conda environment
+pip install torchxrayvision
+conda install streamlit
+conda install matplotlib
+conda install -c conda-forge opencv
