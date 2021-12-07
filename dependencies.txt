@@ -7,3 +7,5 @@ pip install torchxrayvision
 conda install streamlit
 conda install matplotlib
 conda install -c conda-forge opencv
+pip install chembl_webresource_client
+pip install rdkit-pypi
