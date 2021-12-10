@@ -75,9 +75,9 @@ def read_image(imgpath):
 
         img = dicom.dcmread(imgpath).pixel_array
         # image_rescaled = rescale(img, 0.5, anti_aliasing=False)
-        image_resized = resize(img, (img.shape[0] // 2, img.shape[1] // 2),
-                       anti_aliasing=True)
-        return image_resized
+        # image_resized = resize(img, (img.shape[0] // 2, img.shape[1] // 2),
+        #                anti_aliasing=True)
+        return img
     
          
 def generatemodel(xrvmodel,wts):
@@ -198,10 +198,11 @@ if uploaded_file is not None:
 
     #### Read an image
 
-    ds = dicom.dcmread(uploaded_file)
+    # ds = dicom.dcmread(uploaded_file)
+    imgdef = read_image(uploaded_file)
 	
     fig, ax = plt.subplots()
-    ax.imshow(ds.pixel_array,cmap="gray")
+    ax.imshow(imgdef,cmap="gray")
     
     st.pyplot(fig=fig)
 
@@ -211,7 +212,7 @@ if uploaded_file is not None:
     model = generatemodel(xrv.models.DenseNet,"densenet121-res224-mimic_ch") ### MIMIC MODEL+
     model.eval()
     
-    pr = outputprob2(ds.pixel_array,model) 
+    pr = outputprob2(imgdef,model) 
     # pr = {k: v for k, v in sorted(pr.items(), key=lambda item: item[1])}
     cnt = 1
     pr = dict( sorted(pr.items(), key=operator.itemgetter(1),reverse=True))
