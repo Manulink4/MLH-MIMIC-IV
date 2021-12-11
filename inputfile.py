@@ -28,22 +28,46 @@ from rdkit import Chem
 from rdkit.Chem.Descriptors import ExactMolWt
 from chembl_webresource_client.new_client import new_client
 
-st.header("Identify anomalies in chest")
-st.write("Choose a Chest X Ray Image")
+### Title 
+st.markdown("<h1 style='text-align: center;'>Chest Anomaly Identifier</h1>",unsafe_allow_html=True)
+### Description
+st.markdown("""<p style='text-align: center;'>The goal of this application is mainly to help doctors to interpret  
+Chest X-Ray Images, being able to find medical compounds in a quick way to deal with Chest's anomalies found</p>""",unsafe_allow_html=True)
 
-uploaded_file = st.file_uploader("Choose an image...")
+### Image
+st.image("doctors.jpg")
+
+### Uploder 
+# st.markdown("""<p style='text-align: center;'>The goal of this application is mainly to help doctors to interpret  
+# Chest X-Ray Images, being able to find medical compounds in a quick way to deal with Chest's anomalies found</p>""",unsafe_allow_html=True)
+uploaded_file = st.file_uploader("Choose an X-Ray image to detect anomalies of the chest (the file must be a dicom extension or jpg)")
 
 
 
 
-
+#### Get Compounds found
 @st.cache(allow_output_mutation=True)
-def getdrugs(name):
+def getdrugs(name,phase):
     drug_indication = new_client.drug_indication
     molecules = new_client.molecule
     obj = drug_indication.filter(efo_term__icontains=name)   
     appdrugs = molecules.filter(molecule_chembl_id__in=[x['molecule_chembl_id'] for x in obj])
-    df = pd.DataFrame.from_dict(appdrugs)
+    
+
+    if phase!=[]:
+        temp = None
+        for ph in phase:
+            dftemp = pd.DataFrame.from_dict(appdrugs.filter(max_phase=int(ph)))
+            dftemp["phase"] = int(ph)
+            if isinstance(temp,pd.DataFrame):
+                temp= pd.concat([temp,dftemp],axis=0)
+            else:
+                temp = dftemp
+
+        df = temp
+    else:
+        df = pd.DataFrame.from_dict(appdrugs)
+            
     try:
                 df.dropna(subset=["molecule_properties","molecule_structures"],inplace=True)
                 
@@ -64,6 +88,7 @@ def getdrugs(name):
     except:
                 return None
 
+### Read Chest X Ray Image
 def read_image(imgpath):
 
     if (str(imgpath).find("jpg")!=-1) or (str(imgpath).find("png")!=-1):
@@ -72,17 +97,13 @@ def read_image(imgpath):
           sample = Image.open(imgpath)
           return np.array(sample)
     if str(imgpath).find("dcm")!=-1:
-
         img = dicom.dcmread(imgpath).pixel_array
-        # image_rescaled = rescale(img, 0.5, anti_aliasing=False)
-        # image_resized = resize(img, (img.shape[0] // 2, img.shape[1] // 2),
-        #                anti_aliasing=True)
         return img
     
-         
+### Generate torchxrayvision model to find output probabilities       
 def generatemodel(xrvmodel,wts):
-    # odel = xrv.models.DenseNet(weights="densenet121-res224-mimic_nb")
     return xrvmodel(weights=wts)
+### Transform the image to ouput some illness
 def transform2(img):
     input_tensor = torch.from_numpy(img).unsqueeze(0)
     img = input_tensor.numpy()[0, 0, :]
@@ -90,18 +111,9 @@ def transform2(img):
     img = np.clip(img, 0, 1)
     img = Image.fromarray(np.uint8(img * 255) , 'L')
     return img
-
-# def load_image(filename, size=(512,1024)):
-# 	# load image with the preferred size
-# 	pixels = load_img(filename, target_size=size)
-# 	# convert to numpy array
-# 	pixels = img_to_array(pixels)
-# 	# scale from [0,255] to [-1,1]
-# 	pixels = (pixels - 127.5) / 127.5
-# 	# reshape to 1 sample
-# 	pixels = expand_dims(pixels, 0)
-# 	return pixels
+### Transform the image to test an output image
 def transform(img):
+
             img = ((img-img.min())/(img.max()-img.min())*255)
 
 
@@ -127,6 +139,7 @@ def transform(img):
 
             img = transform(img)
             return img
+### Returns the output probabilities of having certain illnesses anomalies
 def testimage(model,img):
     # with torch.no_grad():
     model.eval()
@@ -136,9 +149,7 @@ def testimage(model,img):
 
     return {key:value  for (key,value)  in zip(model.pathologies, out.detach().numpy()[0]) if len(key)>2}
 
-
-
-
+### Resize the model
 def outputprob2(img,pr_model,visimage=True):
     ### Read an image
     img = resize(img, (img.shape[0] // 2, img.shape[1] // 2),
@@ -149,6 +160,7 @@ def outputprob2(img,pr_model,visimage=True):
     ### Test an image
     return testimage(pr_model,img_t)
 
+### Pipeline since we read an image until the ouput it is generated
 def outputprob(imgpath,pr_model,visimage=True):
     ### Read an image
     img = read_image(imgpath)
@@ -161,93 +173,126 @@ def outputprob(imgpath,pr_model,visimage=True):
     return testimage(pr_model,img_t)
 
 
-if uploaded_file is not None:
+### Error in case we do not find compounds
+def error(option):
+    option = str(option).replace(" ","%20")
+    st.markdown(f"""
+            We have not found compounds for this illness; for more information visit this link:
+            [ChEMBL](https://www.ebi.ac.uk/chembl/g/#search_results/all/query={option})
+               """, unsafe_allow_html=True)
 
-    ## Regulating side bar
-    st.sidebar.header('Filter by compound you want ')
-    st.sidebar.write('*Note: Display compounds having values less than the following thresholds*')
-    weight_cutoff = st.sidebar.slider(
-        label="Molecular weight",
-        min_value=0,
-        max_value=1000,
-        value=500,
-        step=10,
-    )
-    logp_cutoff = st.sidebar.slider(
-        label="LogP",
-        min_value=-10,
-        max_value=10,
-        value=5,
-        step=1,
-    )
-    NumHDonors_cutoff = st.sidebar.slider(
-        label="NumHDonors",
-        min_value=0,
-        max_value=15,
-        value=5,
-        step=1,
-    )
-    NumHAcceptors_cutoff = st.sidebar.slider(
-        label="NumHAcceptors",
-        min_value=0,
-        max_value=20,
-        value=10,
-        step=1,
-    )
-   
+### If you insert an image
+if uploaded_file is not None:
 
     #### Read an image
 
-    # ds = dicom.dcmread(uploaded_file)
+   
     imgdef = read_image(uploaded_file)
-	
-    fig, ax = plt.subplots()
-    ax.imshow(imgdef,cmap="gray")
-    
-    st.pyplot(fig=fig)
+else:
+    imgdef = read_image("example.dcm")
+## Controller header
 
-
-
-    st.subheader("Probabilities of the ouput")
-    model = generatemodel(xrv.models.DenseNet,"densenet121-res224-mimic_ch") ### MIMIC MODEL+
-    model.eval()
-    
-    pr = outputprob2(imgdef,model) 
-    # pr = {k: v for k, v in sorted(pr.items(), key=lambda item: item[1])}
-    cnt = 1
-    pr = dict( sorted(pr.items(), key=operator.itemgetter(1),reverse=True))
-
-    option = st.sidebar.selectbox('Select the treatment you believe for these illness',list(pr.keys()))
-    col1,col2,col3 = st.columns((1,1,1))
-    for (key,value) in pr.items():
-        if cnt%3==1:
-            col1.metric(label=key, value=str(cnt), delta=str(value))
-        if cnt%3==2:
-            col2.metric(label=key, value=str(cnt), delta=str(value))
-        if cnt%3==0:
-            col3.metric(label=key, value=str(cnt), delta=str(value))
-        cnt+=1
-        # temp = st.expander("Compunds to take care of {}".format(key))
-        
-    df = getdrugs(option)
-    if df is not None:
+st.sidebar.markdown("<h1 style='text-align: center;'>Compound's filter</h1>",unsafe_allow_html=True)
+## Write the compound 
+st.sidebar.markdown('''
+                <h4 style='text-align: center;'>This controller sidebar is used to filter the compounds by the following features</h4>
                 
-                #### Filtering
-                df_result = df[df["mol_weight"] < weight_cutoff]
-                df_result2 = df_result[df_result["Logp"] < logp_cutoff]
-                df_result3 = df_result2[df_result2["Donnors"] < NumHDonors_cutoff]
-                df_result4 = df_result3[df_result3["Acceptors"] < NumHAcceptors_cutoff]
-                st.subheader("Compounds for {}".format(option))
-                if len(df_result4)==0:
-                    st.write("We have not found some compounds according to these features, try to change the configuration")
-                else:
-                        raw_html = mols2grid.display(df_result,  mapping={"smiles": "SMILES","pref_name":"Name","Acceptors":"Acceptors","Donnors":"Donnors","Logp":"Logp","mol_weight":"mol_weight"},
-                        subset=["img","Name"],tooltip=["Name","Acceptors","Donnors","Logp","mol_weight"],tooltip_placement="top",tooltip_trigger="click hover")._repr_html_()
+                - Molecular weight : is the weight of a compound in grame per mol
+                - LogP             : it measures how hydrophilic or hydrophobic  a compound is
+                - NumDonnors       : number of chemical components that are able to deliver electrons to other chemical components
+                - NumAcceptors       : number of chemical components that are able to accept electrons to other chemical components
+                ''',unsafe_allow_html=True)
+weight_cutoff = st.sidebar.slider(
+    label="Molecular weight",
+    min_value=0,
+    max_value=1000,
+    value=500,
+    step=10,
+    help="Look for compounds that have less or equal molecular weight than the value selected"
+)
+logp_cutoff = st.sidebar.slider(
+    label="LogP",
+    min_value=-10,
+    max_value=10,
+    value=5,
+    step=1,
+    help="Look for compounds that have less or equal logp than the value selected"
+)
+NumHDonors_cutoff = st.sidebar.slider(
+    label="NumHDonors",
+    min_value=0,
+    max_value=15,
+    value=5,
+    step=1,
+    help="Look for compounds that have less or equal donors weight than the value selected"
+)
+NumHAcceptors_cutoff = st.sidebar.slider(
+    label="NumHAcceptors",
+    min_value=0,
+    max_value=20,
+    value=10,
+    step=1,
+    help="Look for compounds that have less or equal acceptors weight than the value selected"
+)
+max_phase = st.sidebar.multiselect("Phase of the compound",
+        ['1','2', '3', '4'],
+        help=""" 
+        - Phase 1 : Phase I   of the compound in progress
+        - Phase 2 : Phase II  of the compound in progress
+        - Phase 3 : Phase III of the compound in progress
+        - Phase 4 : Approved compound 
+        """
+    )
+
+
+### Plot the input image
+fig, ax = plt.subplots()
+ax.imshow(imgdef,cmap="gray")
+st.pyplot(fig=fig)
+# Printing the possibility of having anomalies
+st.markdown("<h3 style='text-align: center;'>Possibility of anomalies</h3>",unsafe_allow_html=True)
+model = generatemodel(xrv.models.DenseNet,"densenet121-res224-mimic_ch") ### MIMIC MODEL+
+model.eval()
+pr = outputprob2(imgdef,model) 
+
+# Sort results by the descending probability order 
+pr = dict( sorted(pr.items(), key=operator.itemgetter(1),reverse=True))
+# Select the treatment 
+option = st.sidebar.selectbox('Anomaly',list(pr.keys()),help='Select the illness or anomaly you want to treat')
+col1,col2,col3 = st.columns((1,1,1))
+cnt = 1
+for (key,value) in pr.items():
+    if cnt%3==1:
+        col1.metric(label=key, value=str(cnt), delta=str(value))
+    if cnt%3==2:
+        col2.metric(label=key, value=str(cnt), delta=str(value))
+    if cnt%3==0:
+        col3.metric(label=key, value=str(cnt), delta=str(value))
+    cnt+=1
+    # temp = st.expander("Compunds to take care of {}".format(key))
+#### Get the compounds for the anomaly selected
+df = getdrugs(option,max_phase)
+st.markdown("<h3 style='text-align: center;'>Compounds for {}</h3>".format(option),unsafe_allow_html=True)
+### If exists the compounds
+if df is not None:
             
-                        components.html(raw_html, width=900, height=900, scrolling=True)
-    else:
-        option = str(option).replace(" ","%20")
-        st.markdown(f"""
-            We have not found compounds for this illness; for more information visit this link:
-            [Wikipedia](https://es.wikipedia.org/wiki/{option})
-               """, unsafe_allow_html=True)
+            #### Filter dataframe by controllers
+            df_result = df[df["mol_weight"] < weight_cutoff]
+            df_result2 = df_result[df_result["Logp"] < logp_cutoff]
+            df_result3 = df_result2[df_result2["Donnors"] < NumHDonors_cutoff]
+            df_result4 = df_result3[df_result3["Acceptors"] < NumHAcceptors_cutoff]
+        
+
+            
+            if len(df_result4)==0:
+                
+                error(option)
+            else:
+                    raw_html = mols2grid.display(df_result,  mapping={"smiles": "SMILES","pref_name":"Name","Acceptors":"Acceptors","Donnors":"Donnors","Logp":"Logp","mol_weight":"mol_weight"},
+                    subset=["img","Name"],tooltip=["Name","Acceptors","Donnors","Logp","mol_weight"],tooltip_placement="top",tooltip_trigger="click hover")._repr_html_()
+        
+                    components.html(raw_html, width=900, height=900, scrolling=True)
+#### We do not find compounds for the anomaly 
+else:
+    error(option)
+
