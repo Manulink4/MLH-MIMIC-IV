@@ -1,5 +1,5 @@
 # MLH-MIMIC-IV
-***State of the work: IN PROGRESS***
+***State of the work: FIRST RELEASE***
 
 Repository for MLH final project. 
 The setup.py is the executable of the application . The application works in windows x64 installing streamlit as a main dependency of the project.
